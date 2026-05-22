@@ -1,0 +1,207 @@
+name: fleet_analytics_semantic_model
+description: >
+  Snowflake Cortex Analyst semantic model for the Route Fleet Analytics platform.
+  Enables natural-language queries over route efficiency, fleet health, and
+  driver performance gold-layer tables.
+
+tables:
+  - name: mart_route_efficiency
+    description: >
+      Daily aggregation of route performance metrics including speed, idle time,
+      miles driven, and a composite efficiency score.
+    base_table:
+      database: FLEET_ANALYTICS
+      schema: GOLD
+      table: MART_ROUTE_EFFICIENCY
+    dimensions:
+      - name: route_id
+        description: Unique identifier for a route (e.g. RT-0001)
+        expr: route_id
+        data_type: VARCHAR
+      - name: route_name
+        description: Human-readable route name including zone
+        expr: route_name
+        data_type: VARCHAR
+      - name: zone
+        description: Geographic zone of the route (North, South, East, West, Central…)
+        expr: zone
+        data_type: VARCHAR
+      - name: district
+        description: Administrative district (District-1 through District-5)
+        expr: district
+        data_type: VARCHAR
+      - name: segment_date
+        description: Calendar date of the route segment
+        expr: segment_date
+        data_type: DATE
+    measures:
+      - name: avg_speed
+        description: Average vehicle speed in miles per hour for this route on this date
+        expr: avg_speed
+        data_type: FLOAT
+        default_aggregation: avg
+      - name: total_miles
+        description: Total miles driven across all vehicles on this route
+        expr: total_miles
+        data_type: FLOAT
+        default_aggregation: sum
+      - name: avg_idle_pct
+        description: >
+          Percentage of time vehicles on this route were idling (speed < 5 mph)
+        expr: avg_idle_pct
+        data_type: FLOAT
+        default_aggregation: avg
+      - name: vehicles_on_route
+        description: Count of distinct vehicles that operated on this route
+        expr: vehicles_on_route
+        data_type: INTEGER
+        default_aggregation: sum
+      - name: efficiency_score
+        description: >
+          Composite score 0-100 computed as:
+          100 - (avg_idle_pct * 0.5) - (GREATEST(0, 35 - avg_speed) * 0.3)
+        expr: efficiency_score
+        data_type: FLOAT
+        default_aggregation: avg
+
+  - name: mart_fleet_health
+    description: >
+      One row per vehicle summarising maintenance health: last service,
+      days since service, YTD maintenance cost, and urgency classification.
+    base_table:
+      database: FLEET_ANALYTICS
+      schema: GOLD
+      table: MART_FLEET_HEALTH
+    dimensions:
+      - name: vehicle_id
+        description: Unique vehicle identifier (e.g. VH-0042)
+        expr: vehicle_id
+        data_type: VARCHAR
+      - name: vehicle_class
+        description: Vehicle class — light, medium, or heavy
+        expr: vehicle_class
+        data_type: VARCHAR
+        allowed_values: ['light', 'medium', 'heavy']
+      - name: make
+        description: Vehicle manufacturer
+        expr: make
+        data_type: VARCHAR
+      - name: model
+        description: Vehicle model name
+        expr: model
+        data_type: VARCHAR
+      - name: status
+        description: Current vehicle status — active, inactive, or maintenance
+        expr: status
+        data_type: VARCHAR
+      - name: maintenance_urgency
+        description: Urgency of next service — high (>90 days), medium (>60 days), low
+        expr: maintenance_urgency
+        data_type: VARCHAR
+        allowed_values: ['low', 'medium', 'high']
+      - name: last_service_date
+        description: Date of the most recent maintenance service event
+        expr: last_service_date
+        data_type: DATE
+    measures:
+      - name: days_since_service
+        description: Calendar days elapsed since the most recent maintenance event
+        expr: days_since_service
+        data_type: INTEGER
+        default_aggregation: avg
+      - name: total_cost_ytd
+        description: Total maintenance spend year-to-date in USD
+        expr: total_cost_ytd
+        data_type: FLOAT
+        default_aggregation: sum
+
+  - name: mart_driver_performance
+    description: >
+      Monthly per-vehicle performance summary including speed, idling, mileage,
+      and a safety score.
+    base_table:
+      database: FLEET_ANALYTICS
+      schema: GOLD
+      table: MART_DRIVER_PERFORMANCE
+    dimensions:
+      - name: vehicle_id
+        description: Unique vehicle identifier
+        expr: vehicle_id
+        data_type: VARCHAR
+      - name: vehicle_class
+        description: Vehicle class — light, medium, or heavy
+        expr: vehicle_class
+        data_type: VARCHAR
+      - name: month
+        description: Calendar month (first day of the month)
+        expr: month
+        data_type: DATE
+    measures:
+      - name: avg_speed
+        description: Average driving speed in mph for the month
+        expr: avg_speed
+        data_type: FLOAT
+        default_aggregation: avg
+      - name: idle_pct
+        description: Percentage of active time spent idling during the month
+        expr: idle_pct
+        data_type: FLOAT
+        default_aggregation: avg
+      - name: total_miles
+        description: Total miles driven during the month
+        expr: total_miles
+        data_type: FLOAT
+        default_aggregation: sum
+      - name: safety_score
+        description: >
+          Composite monthly safety score 0-100 rewarding higher speed up to
+          45 mph and penalising idle time.
+        expr: safety_score
+        data_type: FLOAT
+        default_aggregation: avg
+
+verified_queries:
+  - name: top_idle_routes_last_week
+    question: "Which routes had the highest idle time last week?"
+    sql: >
+      SELECT route_id, route_name, zone, AVG(avg_idle_pct) AS avg_idle_pct
+      FROM FLEET_ANALYTICS.GOLD.MART_ROUTE_EFFICIENCY
+      WHERE segment_date >= DATEADD('day', -7, CURRENT_DATE())
+      GROUP BY route_id, route_name, zone
+      ORDER BY avg_idle_pct DESC
+      LIMIT 10;
+
+  - name: vehicles_overdue_maintenance
+    question: "Show me vehicles overdue for maintenance"
+    sql: >
+      SELECT vehicle_id, make, model, vehicle_class, last_service_date,
+             days_since_service, maintenance_urgency
+      FROM FLEET_ANALYTICS.GOLD.MART_FLEET_HEALTH
+      WHERE maintenance_urgency IN ('medium', 'high')
+      ORDER BY days_since_service DESC;
+
+  - name: avg_speed_by_zone
+    question: "What is the average speed by route zone?"
+    sql: >
+      SELECT zone, AVG(avg_speed) AS avg_speed_mph
+      FROM FLEET_ANALYTICS.GOLD.MART_ROUTE_EFFICIENCY
+      GROUP BY zone
+      ORDER BY avg_speed_mph DESC;
+
+  - name: monthly_fleet_cost
+    question: "What is the total maintenance cost per vehicle class this year?"
+    sql: >
+      SELECT vehicle_class, SUM(total_cost_ytd) AS total_cost_usd
+      FROM FLEET_ANALYTICS.GOLD.MART_FLEET_HEALTH
+      GROUP BY vehicle_class
+      ORDER BY total_cost_usd DESC;
+
+  - name: lowest_efficiency_routes
+    question: "Which routes have the lowest efficiency scores this month?"
+    sql: >
+      SELECT route_id, route_name, zone, AVG(efficiency_score) AS avg_efficiency
+      FROM FLEET_ANALYTICS.GOLD.MART_ROUTE_EFFICIENCY
+      WHERE segment_date >= DATE_TRUNC('month', CURRENT_DATE())
+      GROUP BY route_id, route_name, zone
+      ORDER BY avg_efficiency ASC
+      LIMIT 10;

@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: int_route_segments
+    description: >
+      GPS events enriched with route metadata and per-segment haversine distance.
+      Each row is a single GPS ping with the distance travelled since the previous
+      ping for the same vehicle/route/day combination.
+    columns:
+      - name: event_id
+        tests: [not_null, unique]
+      - name: vehicle_id
+        tests: [not_null]
+      - name: route_id
+        tests: [not_null]
+      - name: event_date
+        tests: [not_null]
+      - name: speed_mph
+        tests: [not_null]
+      - name: idle_flag
+        tests:
+          - accepted_values:
+              values: [0, 1]
+      - name: segment_distance_miles
+        tests: [not_null]
+
+  - name: int_vehicle_daily_stats
+    description: >
+      Aggregated daily driving statistics per vehicle: total miles, idle time,
+      average speed, and trip count.
+    columns:
+      - name: vehicle_id
+        tests: [not_null]
+      - name: event_date
+        tests: [not_null]
+      - name: trips_count
+        tests: [not_null]
+      - name: total_miles
+        tests: [not_null]
+      - name: idle_pct
+        tests: [not_null]

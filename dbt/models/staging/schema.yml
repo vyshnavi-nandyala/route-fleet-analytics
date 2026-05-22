@@ -1,0 +1,106 @@
+version: 2
+
+sources:
+  - name: raw
+    database: FLEET_ANALYTICS
+    schema: RAW
+    tables:
+      - name: routes
+        columns:
+          - name: route_id
+            tests: [not_null, unique]
+          - name: zone
+            tests: [not_null]
+          - name: district
+            tests: [not_null]
+      - name: vehicles
+        columns:
+          - name: vehicle_id
+            tests: [not_null, unique]
+          - name: vehicle_class
+            tests:
+              - accepted_values:
+                  values: ['light', 'medium', 'heavy']
+          - name: status
+            tests:
+              - accepted_values:
+                  values: ['active', 'inactive', 'maintenance']
+      - name: gps_events
+        columns:
+          - name: event_id
+            tests: [not_null, unique]
+          - name: vehicle_id
+            tests: [not_null]
+          - name: route_id
+            tests: [not_null]
+          - name: speed_mph
+            tests: [not_null]
+      - name: maintenance_logs
+        columns:
+          - name: log_id
+            tests: [not_null, unique]
+          - name: vehicle_id
+            tests: [not_null]
+          - name: cost_usd
+            tests: [not_null]
+
+models:
+  - name: stg_routes
+    description: "Cleaned and renamed routes from raw layer"
+    columns:
+      - name: route_id
+        tests: [not_null, unique]
+      - name: zone
+        tests: [not_null]
+      - name: district
+        tests: [not_null]
+      - name: total_stops
+        tests: [not_null]
+
+  - name: stg_vehicles
+    description: "Cleaned vehicle registry"
+    columns:
+      - name: vehicle_id
+        tests: [not_null, unique]
+      - name: vehicle_class
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['light', 'medium', 'heavy']
+      - name: status
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['active', 'inactive', 'maintenance']
+
+  - name: stg_gps_events
+    description: "GPS telemetry events filtered to Houston bounding box"
+    columns:
+      - name: event_id
+        tests: [not_null, unique]
+      - name: vehicle_id
+        tests: [not_null]
+      - name: route_id
+        tests: [not_null]
+      - name: lat
+        tests: [not_null]
+      - name: lon
+        tests: [not_null]
+      - name: speed_mph
+        tests: [not_null]
+      - name: event_date
+        tests: [not_null]
+
+  - name: stg_maintenance
+    description: "Vehicle maintenance and service log records"
+    columns:
+      - name: log_id
+        tests: [not_null, unique]
+      - name: vehicle_id
+        tests: [not_null]
+      - name: service_type
+        tests: [not_null]
+      - name: service_date
+        tests: [not_null]
+      - name: cost_usd
+        tests: [not_null]

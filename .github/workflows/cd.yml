@@ -1,0 +1,53 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  trigger-airflow-dag:
+    name: Trigger Airflow fleet_pipeline DAG
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger DAG via Airflow REST API
+        env:
+          AIRFLOW_URL: ${{ secrets.AIRFLOW_URL }}
+          AIRFLOW_USER: ${{ secrets.AIRFLOW_USER }}
+          AIRFLOW_PASSWORD: ${{ secrets.AIRFLOW_PASSWORD }}
+        run: |
+          PAYLOAD=$(jq -n \
+            --arg run_id "cd_run_$(date +%Y%m%d_%H%M%S)" \
+            --arg note "Triggered by GitHub Actions CD on merge to main" \
+            '{dag_run_id: $run_id, conf: {triggered_by: "github_actions", note: $note}}')
+
+          STATUS=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -X POST "${AIRFLOW_URL}/api/v1/dags/fleet_pipeline/dagRuns" \
+            -H "Content-Type: application/json" \
+            -u "${AIRFLOW_USER}:${AIRFLOW_PASSWORD}" \
+            -d "$PAYLOAD")
+
+          cat /tmp/response.json
+          if [ "$STATUS" -ne 200 ] && [ "$STATUS" -ne 201 ]; then
+            echo "Airflow trigger failed with HTTP $STATUS"
+            exit 1
+          fi
+          echo "DAG triggered successfully (HTTP $STATUS)"
+
+      - name: Post Slack notification on success
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -s -X POST "$SLACK_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d '{"text":":rocket: *Fleet Pipeline triggered* — merge to `main` by ${{ github.actor }}"}'
+
+      - name: Post Slack notification on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -s -X POST "$SLACK_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d '{"text":":red_circle: *Fleet CD failed* — could not trigger Airflow DAG after merge by ${{ github.actor }}"}'

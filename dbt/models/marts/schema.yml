@@ -1,0 +1,58 @@
+version: 2
+
+models:
+  - name: mart_route_efficiency
+    description: >
+      Daily route-level aggregation of GPS telemetry.  Includes average speed,
+      total miles driven, idle percentage, and a composite efficiency score.
+    columns:
+      - name: route_id
+        tests: [not_null]
+      - name: segment_date
+        tests: [not_null]
+      - name: avg_speed
+        tests: [not_null]
+      - name: total_miles
+        tests: [not_null]
+      - name: avg_idle_pct
+        tests: [not_null]
+      - name: vehicles_on_route
+        tests: [not_null]
+      - name: efficiency_score
+        tests: [not_null]
+
+  - name: mart_fleet_health
+    description: >
+      One row per vehicle with maintenance health status: last service date,
+      days since service, YTD cost, and urgency classification.
+    columns:
+      - name: vehicle_id
+        tests: [not_null, unique]
+      - name: vehicle_class
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['light', 'medium', 'heavy']
+      - name: maintenance_urgency
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['low', 'medium', 'high']
+
+  - name: mart_driver_performance
+    description: >
+      Monthly performance roll-up per vehicle with average speed, idle percentage,
+      total miles, and a safety score.
+    columns:
+      - name: vehicle_id
+        tests: [not_null]
+      - name: month
+        tests: [not_null]
+      - name: avg_speed
+        tests: [not_null]
+      - name: idle_pct
+        tests: [not_null]
+      - name: total_miles
+        tests: [not_null]
+      - name: safety_score
+        tests: [not_null]
