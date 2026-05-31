@@ -32,12 +32,14 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['light', 'medium', 'heavy']
+              arguments:
+                values: ['light', 'medium', 'heavy']
       - name: maintenance_urgency
         tests:
           - not_null
           - accepted_values:
-              values: ['low', 'medium', 'high']
+              arguments:
+                values: ['low', 'medium', 'high']
 
   - name: mart_driver_performance
     description: >

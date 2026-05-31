@@ -20,7 +20,8 @@ models:
       - name: idle_flag
         tests:
           - accepted_values:
-              values: [0, 1]
+              arguments:
+                values: [0, 1]
       - name: segment_distance_miles
         tests: [not_null]
 
@@ -40,4 +41,3 @@ models:
       - name: idle_pct
         tests: [not_null]
 
-        
