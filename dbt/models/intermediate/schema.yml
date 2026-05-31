@@ -39,3 +39,5 @@ models:
         tests: [not_null]
       - name: idle_pct
         tests: [not_null]
+
+        
